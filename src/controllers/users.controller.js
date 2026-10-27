@@ -5,6 +5,10 @@ const {
   updateUser,
   deleteUser,
 } = require("../services/users.service");
+const {
+  parsePagination,
+  formatPaginatedResponse,
+} = require("../utils/pagination");
 
 const create = async (req, res) => {
   try {
@@ -29,8 +33,59 @@ const create = async (req, res) => {
 
 const list = async (req, res) => {
   try {
-    const result = await listUsers();
-    return res.status(200).json(result);
+    const pagination = parsePagination(req.query);
+    if (pagination.error) {
+      return res.status(400).json({ error: pagination.error });
+    }
+    const { page, limit, skip, take } = pagination;
+
+    const allowedSortBy = ["createdAt", "username", "fullname"];
+    const sortBy = req.query.sortBy || "createdAt";
+    if (!allowedSortBy.includes(sortBy)) {
+      return res
+        .status(400)
+        .json({ error: "sortBy must be one of: createdAt, username, fullname" });
+    }
+
+    const allowedOrder = ["asc", "desc"];
+    const order = req.query.order || "desc";
+    if (!allowedOrder.includes(order)) {
+      return res.status(400).json({ error: "order must be asc or desc" });
+    }
+
+    const where = {};
+
+    if (req.query.isPrivate !== undefined) {
+      if (req.query.isPrivate === "true") {
+        where.isPrivate = true;
+      } else if (req.query.isPrivate === "false") {
+        where.isPrivate = false;
+      } else {
+        return res
+          .status(400)
+          .json({ error: "isPrivate must be true or false" });
+      }
+    }
+
+    if (req.query.search) {
+      where.OR = [
+        { username: { contains: req.query.search, mode: "insensitive" } },
+        { fullname: { contains: req.query.search, mode: "insensitive" } },
+      ];
+    }
+
+    const orderBy = { [sortBy]: order };
+
+    const { data, total } = await listUsers({
+      skip,
+      take,
+      orderBy,
+      where,
+    });
+
+    return res
+      .status(200)
+      .json(formatPaginatedResponse(data, page, limit, total));
   } catch (err) {
     return res.status(500).json({ error: "Internal server error" });
   }
