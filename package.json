@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node test_lab14.js",
+    "test": "node test_relations.js",
     "seed": "prisma db seed"
   },
   "prisma": {

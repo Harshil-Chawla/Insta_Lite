@@ -13,6 +13,20 @@ const listPosts = async ({ skip, take, orderBy, where } = {}) => {
       take,
       orderBy,
       where,
+      include: {
+        author: {
+          select: {
+            id: true,
+            username: true,
+            fullname: true,
+          },
+        },
+        _count: {
+          select: {
+            likes: true,
+          },
+        },
+      },
     }),
     prisma.post.count({
       where,
@@ -24,6 +38,20 @@ const listPosts = async ({ skip, take, orderBy, where } = {}) => {
 const getPostById = async (id) => {
   return await prisma.post.findUnique({
     where: { id },
+    include: {
+      author: {
+        select: {
+          id: true,
+          username: true,
+          fullname: true,
+        },
+      },
+      _count: {
+        select: {
+          likes: true,
+        },
+      },
+    },
   });
 };
 

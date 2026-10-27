@@ -1,3 +1,4 @@
+const prisma = require("../db");
 const {
   createPost,
   listPosts,
@@ -12,18 +13,45 @@ const {
 
 const create = async (req, res) => {
   try {
-    const { imageUrl, caption, location } = req.body || {};
-    if (!imageUrl) {
-      return res.status(400).json({ error: "imageUrl is required" });
+    const { imageUrl, authorId, caption, location } = req.body || {};
+
+    if (!imageUrl || authorId === undefined || authorId === null) {
+      return res
+        .status(400)
+        .json({ error: "imageUrl and authorId are required" });
     }
 
-    const postData = { imageUrl };
-    if (caption !== undefined) postData.caption = caption;
-    if (location !== undefined) postData.location = location;
+    const parsedAuthorId = parseInt(authorId, 10);
+    if (isNaN(parsedAuthorId)) {
+      return res.status(404).json({ error: "User not found" });
+    }
 
-    const result = await createPost(postData);
-    return res.status(201).json(result);
-  } catch (err) {
+    const user = await prisma.user.findUnique({
+      where: { id: parsedAuthorId },
+    });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const postData = {
+      imageUrl,
+      authorId: parsedAuthorId,
+    };
+
+    if (caption !== undefined) {
+      postData.caption = caption;
+    }
+
+    if (location !== undefined) {
+      postData.location = location;
+    }
+
+    const post = await createPost(postData);
+    return res.status(201).json(post);
+  } catch (error) {
+    if (error.code === "P2003") {
+      return res.status(404).json({ error: "User not found" });
+    }
     return res.status(500).json({ error: "Internal server error" });
   }
 };
@@ -36,11 +64,11 @@ const list = async (req, res) => {
     }
     const { page, limit, skip, take } = pagination;
 
-    const allowedSortBy = ["createdAt", "updatedAt"];
+    const allowedSortBy = ["createdAt", "updatedAt", "likes"];
     const sortBy = req.query.sortBy || "createdAt";
     if (!allowedSortBy.includes(sortBy)) {
       return res.status(400).json({
-        error: "sortBy must be one of: createdAt, updatedAt",
+        error: "sortBy must be one of: createdAt, updatedAt, likes",
       });
     }
 
@@ -93,7 +121,12 @@ const list = async (req, res) => {
       if (toDate) where.createdAt.lt = toDate;
     }
 
-    const orderBy = { [sortBy]: order };
+    let orderBy;
+    if (sortBy === "likes") {
+      orderBy = [{ likes: { _count: order } }, { createdAt: "desc" }];
+    } else {
+      orderBy = { [sortBy]: order };
+    }
 
     const { data, total } = await listPosts({
       skip,
